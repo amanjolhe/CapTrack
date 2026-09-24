@@ -50,11 +50,32 @@ export default function ReminderScreen({ onSelectIPO }) {
     ]);
   };
 
+  const requestPushPermission = async () => {
+    if (typeof window !== 'undefined' && 'Notification' in window) {
+      try {
+        const perm = await Notification.requestPermission();
+        if (perm === 'granted') {
+          Alert.alert("Success 🔔", "Push Notification permission granted!");
+        } else if (perm === 'denied') {
+          Alert.alert("Permission Blocked", "Please enable notifications in iPhone Settings -> Safari -> Notifications -> CapTrack.");
+        }
+      } catch (err) {
+        console.warn("Notification request error:", err);
+      }
+    } else {
+      Alert.alert("Info", "Push notifications are active when CapTrack is added to your iPhone Home Screen (Safari Share -> Add to Home Screen).");
+    }
+  };
+
   return (
     <View style={styles.container}>
       <View style={styles.headerTitleRow}>
         <Text style={styles.screenTitle}>🔔 Scheduled Push Reminders</Text>
         <Text style={styles.screenSub}>Device alerts set for IPO Opening, Closing, and Allotment events.</Text>
+        
+        <TouchableOpacity style={styles.enablePermBtn} onPress={requestPushPermission}>
+          <Text style={styles.enablePermText}>🔔 Tap to Allow iOS Push Notifications</Text>
+        </TouchableOpacity>
       </View>
 
       {loading && !refreshing ? (
@@ -130,6 +151,21 @@ const styles = StyleSheet.create({
   screenSub: {
     color: theme.colors.textMuted,
     fontSize: 12,
+  },
+  enablePermBtn: {
+    marginTop: 10,
+    backgroundColor: 'rgba(56, 189, 248, 0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(56, 189, 248, 0.4)',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    alignSelf: 'flex-start',
+  },
+  enablePermText: {
+    color: theme.colors.accentPrimary,
+    fontSize: 12,
+    fontWeight: '700',
   },
   listPadding: {
     paddingHorizontal: 16,
