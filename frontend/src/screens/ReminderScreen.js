@@ -39,19 +39,20 @@ export default function ReminderScreen({ onSelectIPO }) {
     }
   };
 
-  const handleDeleteReminder = (id) => {
-    Alert.alert("Cancel Reminder", "Remove scheduled push alert for this IPO?", [
-      { text: "Cancel", style: "cancel" },
-      { 
-        text: "Remove", 
-        style: "destructive",
-        onPress: async () => {
-          setReminders(prev => prev.filter(r => r.reminder_id !== id));
-          await deleteReminder(id);
-        }
-      }
-    ]);
+  const handleDeleteReminder = async (id) => {
+    let confirmed = false;
+    if (typeof window !== 'undefined' && window.confirm) {
+      confirmed = window.confirm("Remove scheduled push alert for this IPO?");
+    } else {
+      confirmed = true;
+    }
+
+    if (confirmed) {
+      setReminders(prev => prev.filter(r => r.reminder_id !== id));
+      await deleteReminder(id);
+    }
   };
+
 
 
   const requestPushPermission = async () => {

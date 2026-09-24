@@ -38,6 +38,15 @@ export default function App() {
       }
     }
     requestPermissions();
+
+    // Register Service Worker on web for background notification delivery when closed
+    if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js').then((reg) => {
+        console.log('CapTrack Service Worker registered:', reg.scope);
+      }).catch((err) => {
+        console.warn('Service Worker registration failed:', err);
+      });
+    }
   }, []);
 
   const handleOpenReminderModal = (ipo) => {
@@ -87,43 +96,71 @@ export default function App() {
       }
     }
 
-    // 2. Web & iOS Home Screen PWA Notifications
+    // 2. Web & iOS Home Screen PWA Background Notifications (via Service Worker)
     if (typeof window !== 'undefined' && 'Notification' in window) {
-      const dispatchWebNotification = () => {
-        try {
-          new Notification(`🔔 CapTrack IPO Alert: ${ipoName}`, {
-            body: `Event Alert: ${eventType.replace('_', ' ').toUpperCase()} for ${reminderTime}. Check live GMP & subscription!`,
-            icon: '/favicon.png',
-            badge: '/favicon.png'
-          });
-        } catch (err) {
-          console.warn("Web Notification error:", err);
+      const title = `🔔 CapTrack IPO Alert: ${ipoName}`;
+      const body = `Event Alert: ${eventType.replace('_', ' ').toUpperCase()} for ${reminderTime}. Check live GMP & subscription!`;
+
+      const scheduleWebNotification = async () => {
+        if (Notification.permission !== 'granted') {
+          try {
+            const perm = await Notification.requestPermission();
+            if (perm !== 'granted') return;
+          } catch (e) {
+            console.warn("Notification permission error:", e);
+            return;
+          }
+        }
+
+        // Try Service Worker registration for persistent background alert when app is closed
+        if ('serviceWorker' in navigator) {
+          try {
+            const reg = await navigator.serviceWorker.ready;
+            if (reg && reg.active) {
+              reg.active.postMessage({
+                type: 'SCHEDULE_REMINDER',
+                title,
+                body,
+                delaySeconds,
+                reminderId: ipoId
+              });
+            }
+            if (delaySeconds <= 5 && reg.showNotification) {
+              reg.showNotification(title, {
+                body,
+                icon: '/favicon.png',
+                badge: '/favicon.png'
+              });
+            }
+            return;
+          } catch (err) {
+            console.warn("Service Worker notification error, falling back to direct window notification:", err);
+          }
+        }
+
+        // Direct browser notification fallback
+        if (delaySeconds <= 5) {
+          new Notification(title, { body, icon: '/favicon.png' });
+        } else {
+          setTimeout(() => {
+            new Notification(title, { body, icon: '/favicon.png' });
+          }, delaySeconds * 1000);
         }
       };
 
-      if (Notification.permission === 'granted') {
-        if (delaySeconds <= 5) {
-          dispatchWebNotification();
-        } else {
-          setTimeout(dispatchWebNotification, delaySeconds * 1000);
-        }
-      } else if (Notification.permission !== 'denied') {
-        try {
-          const perm = await Notification.requestPermission();
-          if (perm === 'granted') {
-            dispatchWebNotification();
-          }
-        } catch (e) {
-          console.warn("Permission error:", e);
-        }
-      }
+      scheduleWebNotification();
     }
 
-    Alert.alert(
-      "Reminder Set! 🔔",
-      `Notification scheduled for ${ipoName} (${eventType.replace('_', ' ')}) at ${reminderTime}.`
-    );
+    if (typeof window !== 'undefined' && window.alert) {
+      window.alert(`Reminder Set! 🔔\nNotification scheduled for ${ipoName} (${eventType.replace('_', ' ')}) at ${reminderTime}.`);
+    } else {
+      Alert.alert(
+        "Reminder Set! 🔔",
+        `Notification scheduled for ${ipoName} (${eventType.replace('_', ' ')}) at ${reminderTime}.`
+      );
+    }
   };
+
 
   return (
     <SafeAreaView style={styles.safeArea}>
