@@ -164,9 +164,22 @@ export const fetchIPOSubscription = async (id) => {
   }
 };
 
+export const getClientId = () => {
+  if (typeof window !== 'undefined' && window.localStorage) {
+    let cid = localStorage.getItem('captrack_client_id');
+    if (!cid) {
+      cid = 'client_' + Math.random().toString(36).substring(2, 9) + '_' + Date.now().toString(36);
+      localStorage.setItem('captrack_client_id', cid);
+    }
+    return cid;
+  }
+  return 'default_user';
+};
+
 export const toggleWatchlist = async (id) => {
   try {
-    const res = await client.post(`/ipo/${id}/watch`);
+    const userId = getClientId();
+    const res = await client.post(`/ipo/${id}/watch`, null, { params: { user_id: userId } });
     return res.data;
   } catch (err) {
     return { is_watched: true };
@@ -174,19 +187,69 @@ export const toggleWatchlist = async (id) => {
 };
 
 export const setReminder = async (id, reminderTime, eventType = 'open_date') => {
+  const userId = getClientId();
   try {
     const res = await client.post(`/ipo/${id}/reminder`, null, {
-      params: { reminder_time: reminderTime, event_type: eventType }
+      params: { reminder_time: reminderTime, event_type: eventType, user_id: userId }
     });
+    
+    // Save to local storage cache as well
+    if (typeof window !== 'undefined' && window.localStorage) {
+      const local = JSON.parse(localStorage.getItem('captrack_local_reminders') || '[]');
+      const newRem = {
+        reminder_id: res.data?.reminder_id || Date.now(),
+        ipo_id: id,
+        ipo_name: res.data?.ipo_name || `IPO #${id}`,
+        symbol: res.data?.symbol || 'IPO',
+        event_type: eventType,
+        reminder_time: reminderTime,
+        is_notified: false,
+        user_id: userId
+      };
+      localStorage.setItem('captrack_local_reminders', JSON.stringify([...local.filter(r => r.reminder_id !== newRem.reminder_id), newRem]));
+    }
+
     return res.data;
   } catch (err) {
-    return { message: "Reminder scheduled locally", reminder_time: reminderTime };
+    console.warn("Backend error setting reminder, fallback to local storage:", err.message);
+    const newRem = {
+      reminder_id: Date.now(),
+      ipo_id: id,
+      event_type: eventType,
+      reminder_time: reminderTime,
+      is_notified: false,
+      user_id: userId
+    };
+    if (typeof window !== 'undefined' && window.localStorage) {
+      const local = JSON.parse(localStorage.getItem('captrack_local_reminders') || '[]');
+      localStorage.setItem('captrack_local_reminders', JSON.stringify([...local, newRem]));
+    }
+    return { message: "Reminder scheduled locally", reminder_time: reminderTime, reminder_id: newRem.reminder_id };
+  }
+};
+
+export const deleteReminder = async (reminderId) => {
+  const userId = getClientId();
+  // Remove from localStorage
+  if (typeof window !== 'undefined' && window.localStorage) {
+    const local = JSON.parse(localStorage.getItem('captrack_local_reminders') || '[]');
+    const filtered = local.filter(r => r.reminder_id !== reminderId);
+    localStorage.setItem('captrack_local_reminders', JSON.stringify(filtered));
+  }
+  
+  try {
+    const res = await client.delete(`/reminders/${reminderId}`, { params: { user_id: userId } });
+    return res.data;
+  } catch (err) {
+    console.warn("Backend error deleting reminder:", err.message);
+    return { status: "success", deleted_id: reminderId };
   }
 };
 
 export const fetchWatchlist = async () => {
   try {
-    const res = await client.get('/watchlist');
+    const userId = getClientId();
+    const res = await client.get('/watchlist', { params: { user_id: userId } });
     return res.data;
   } catch (err) {
     return FALLBACK_IPOS.filter(i => i.is_watched).map(ipo => ({
@@ -200,20 +263,32 @@ export const fetchWatchlist = async () => {
 };
 
 export const fetchReminders = async () => {
+  const userId = getClientId();
   try {
-    const res = await client.get('/reminders');
-    return res.data;
-  } catch (err) {
-    return [
-      {
-        reminder_id: 101,
-        ipo_id: 1,
-        ipo_name: "Premier Tech Technologies Ltd",
-        symbol: "PREMIERTECH",
-        event_type: "open_date",
-        reminder_time: "2026-09-24 09:30",
-        is_notified: false
+    const res = await client.get('/reminders', { params: { user_id: userId } });
+    const remoteReminders = res.data || [];
+    
+    // Merge with local storage if offline or additional
+    let localReminders = [];
+    if (typeof window !== 'undefined' && window.localStorage) {
+      localReminders = JSON.parse(localStorage.getItem('captrack_local_reminders') || '[]');
+    }
+
+    const map = new Map();
+    remoteReminders.forEach(r => map.set(r.reminder_id, r));
+    localReminders.forEach(r => {
+      if (!map.has(r.reminder_id)) {
+        map.set(r.reminder_id, r);
       }
-    ];
+    });
+
+    return Array.from(map.values());
+  } catch (err) {
+    console.warn("Backend reminders error, using local storage:", err.message);
+    if (typeof window !== 'undefined' && window.localStorage) {
+      return JSON.parse(localStorage.getItem('captrack_local_reminders') || '[]');
+    }
+    return [];
   }
 };
+

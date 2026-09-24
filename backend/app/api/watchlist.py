@@ -41,10 +41,11 @@ def get_user_watchlist(user_id: str = "default_user", session: Session = Depends
 
 @router.get("/reminders", response_model=List[Dict[str, Any]])
 def get_user_reminders(user_id: str = "default_user", session: Session = Depends(get_session)):
-    """Get all active reminders for the user."""
-    reminders = session.exec(
-        select(IPOReminder).where(IPOReminder.user_id == user_id)
-    ).all()
+    """Get all active reminders for the specific user/client."""
+    query = select(IPOReminder)
+    if user_id != "all":
+        query = query.where(IPOReminder.user_id == user_id)
+    reminders = session.exec(query).all()
 
     results = []
     for rem in reminders:
@@ -57,7 +58,20 @@ def get_user_reminders(user_id: str = "default_user", session: Session = Depends
                 "symbol": ipo.symbol,
                 "event_type": rem.event_type,
                 "reminder_time": rem.reminder_time,
-                "is_notified": rem.is_notified
+                "is_notified": rem.is_notified,
+                "user_id": rem.user_id
             })
 
     return results
+
+@router.delete("/reminders/{reminder_id}", response_model=Dict[str, Any])
+def delete_user_reminder(reminder_id: int, user_id: str = "default_user", session: Session = Depends(get_session)):
+    """Delete a scheduled reminder."""
+    rem = session.get(IPOReminder, reminder_id)
+    if not rem:
+        raise HTTPException(status_code=404, detail="Reminder not found")
+    
+    session.delete(rem)
+    session.commit()
+    return {"status": "success", "deleted_id": reminder_id}
+

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, FlatList, ActivityIndicator, TouchableOpacity, RefreshControl, Alert } from 'react-native';
 import { theme } from '../theme/theme';
-import { fetchReminders } from '../api/client';
+import { fetchReminders, deleteReminder } from '../api/client';
 
 export default function ReminderScreen({ onSelectIPO }) {
   const [reminders, setReminders] = useState([]);
@@ -45,10 +45,14 @@ export default function ReminderScreen({ onSelectIPO }) {
       { 
         text: "Remove", 
         style: "destructive",
-        onPress: () => setReminders(prev => prev.filter(r => r.reminder_id !== id))
+        onPress: async () => {
+          setReminders(prev => prev.filter(r => r.reminder_id !== id));
+          await deleteReminder(id);
+        }
       }
     ]);
   };
+
 
   const requestPushPermission = async () => {
     if (typeof window !== 'undefined' && 'Notification' in window) {
