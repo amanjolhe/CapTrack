@@ -75,3 +75,35 @@ def delete_user_reminder(reminder_id: int, user_id: str = "default_user", sessio
     session.commit()
     return {"status": "success", "deleted_id": reminder_id}
 
+from pydantic import BaseModel
+from app.models.ipo import UserPushSubscription
+
+class PushSubPayload(BaseModel):
+    user_id: str
+    endpoint: str
+    p256dh: str
+    auth: str
+
+@router.post("/push-subscribe")
+def subscribe_push(payload: PushSubPayload, session: Session = Depends(get_session)):
+    """Save user web push notification subscription."""
+    existing = session.exec(
+        select(UserPushSubscription).where(UserPushSubscription.endpoint == payload.endpoint)
+    ).first()
+    if existing:
+        existing.user_id = payload.user_id
+        existing.p256dh = payload.p256dh
+        existing.auth = payload.auth
+        session.add(existing)
+    else:
+        new_sub = UserPushSubscription(
+            user_id=payload.user_id,
+            endpoint=payload.endpoint,
+            p256dh=payload.p256dh,
+            auth=payload.auth
+        )
+        session.add(new_sub)
+    session.commit()
+    return {"status": "subscribed"}
+
+

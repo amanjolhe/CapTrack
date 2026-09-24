@@ -176,6 +176,28 @@ export const getClientId = () => {
   return 'default_user';
 };
 
+export const savePushSubscription = async (subscription) => {
+  if (!subscription || !subscription.endpoint) return;
+  const userId = getClientId();
+  try {
+    const key = subscription.getKey ? subscription.getKey('p256dh') : null;
+    const auth = subscription.getKey ? subscription.getKey('auth') : null;
+    const p256dhStr = key ? btoa(String.fromCharCode.apply(null, new Uint8Array(key))) : '';
+    const authStr = auth ? btoa(String.fromCharCode.apply(null, new Uint8Array(auth))) : '';
+
+    const res = await client.post('/push-subscribe', {
+      user_id: userId,
+      endpoint: subscription.endpoint,
+      p256dh: p256dhStr,
+      auth: authStr
+    });
+    return res.data;
+  } catch (err) {
+    console.warn("Failed to send push subscription to backend:", err.message);
+  }
+};
+
+
 export const toggleWatchlist = async (id) => {
   try {
     const userId = getClientId();

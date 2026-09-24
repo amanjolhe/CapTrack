@@ -148,12 +148,62 @@ def run_sync_job_sync():
     """Wrapper function to execute async sync in scheduler."""
     asyncio.run(sync_live_ipos_to_db())
 
+def check_due_reminders():
+    """Checks for due reminders and dispatches Web Push notifications directly to client endpoints even if app is closed."""
+    from datetime import datetime
+    import zoneinfo
+    try:
+        ist = zoneinfo.ZoneInfo("Asia/Kolkata")
+        now_str = datetime.now(ist).strftime("%Y-%m-%d %H:%M")
+    except Exception:
+        now_str = datetime.now().strftime("%Y-%m-%d %H:%M")
+
+    with Session(engine) as session:
+        from app.models.ipo import IPOReminder, UserPushSubscription
+        due_reminders = session.exec(
+            select(IPOReminder).where(IPOReminder.is_notified == False)
+        ).all()
+
+        for rem in due_reminders:
+            if rem.reminder_time <= now_str:
+                ipo = session.get(IPO, rem.ipo_id)
+                ipo_name = ipo.name if ipo else f"IPO #{rem.ipo_id}"
+                
+                subs = session.exec(
+                    select(UserPushSubscription).where(UserPushSubscription.user_id == rem.user_id)
+                ).all()
+
+                for sub in subs:
+                    try:
+                        from pywebpush import webpush
+                        subscription_info = {
+                            "endpoint": sub.endpoint,
+                            "keys": {
+                                "p256dh": sub.p256dh,
+                                "auth": sub.auth
+                            }
+                        }
+                        webpush(
+                            subscription_info=subscription_info,
+                            data=f"🔔 CapTrack IPO Alert: {ipo_name} - {rem.event_type.replace('_', ' ').upper()}",
+                            vapid_claims={"sub": "mailto:support@captrack.app"}
+                        )
+                    except Exception as pe:
+                        logger.warn(f"WebPush send log for user {rem.user_id}: {pe}")
+
+                rem.is_notified = True
+                session.add(rem)
+
+        session.commit()
+
 def start_scheduler():
     if not scheduler.running:
         scheduler.add_job(run_sync_job_sync, 'interval', hours=24, id='daily_live_ipo_sync')
+        scheduler.add_job(check_due_reminders, 'interval', minutes=1, id='check_due_reminders')
         scheduler.start()
-        logger.info("APScheduler automated daily live IPO sync started.")
+        logger.info("APScheduler automated daily live IPO sync and 1-minute push notification dispatch started.")
 
 def stop_scheduler():
     if scheduler.running:
         scheduler.shutdown()
+

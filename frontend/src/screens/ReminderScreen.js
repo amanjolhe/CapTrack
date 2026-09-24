@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, FlatList, ActivityIndicator, TouchableOpacity, RefreshControl, Alert } from 'react-native';
 import { theme } from '../theme/theme';
-import { fetchReminders, deleteReminder } from '../api/client';
+import { fetchReminders, deleteReminder, savePushSubscription } from '../api/client';
 
 export default function ReminderScreen({ onSelectIPO }) {
+
   const [reminders, setReminders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -53,24 +54,51 @@ export default function ReminderScreen({ onSelectIPO }) {
     }
   };
 
-
-
   const requestPushPermission = async () => {
     if (typeof window !== 'undefined' && 'Notification' in window) {
       try {
         const perm = await Notification.requestPermission();
         if (perm === 'granted') {
-          Alert.alert("Success 🔔", "Push Notification permission granted!");
+          if ('serviceWorker' in navigator && 'PushManager' in window) {
+            try {
+              const reg = await navigator.serviceWorker.ready;
+              let sub = await reg.pushManager.getSubscription();
+              if (!sub) {
+                sub = await reg.pushManager.subscribe({
+                  userVisibleOnly: true
+                });
+              }
+              if (sub) {
+                await savePushSubscription(sub);
+              }
+            } catch (swErr) {
+              console.warn("SW push subscribe error:", swErr);
+            }
+          }
+          if (window.alert) {
+            window.alert("Success 🔔\nPush Notification permission granted!");
+          } else {
+            Alert.alert("Success 🔔", "Push Notification permission granted!");
+          }
         } else if (perm === 'denied') {
-          Alert.alert("Permission Blocked", "Please enable notifications in iPhone Settings -> Safari -> Notifications -> CapTrack.");
+          if (window.alert) {
+            window.alert("Permission Blocked\nPlease enable notifications in iPhone Settings -> Safari -> Notifications -> CapTrack.");
+          } else {
+            Alert.alert("Permission Blocked", "Please enable notifications in iPhone Settings -> Safari -> Notifications -> CapTrack.");
+          }
         }
       } catch (err) {
         console.warn("Notification request error:", err);
       }
     } else {
-      Alert.alert("Info", "Push notifications are active when CapTrack is added to your iPhone Home Screen (Safari Share -> Add to Home Screen).");
+      if (window.alert) {
+        window.alert("Info\nPush notifications are active when CapTrack is added to your iPhone Home Screen (Safari Share -> Add to Home Screen).");
+      } else {
+        Alert.alert("Info", "Push notifications are active when CapTrack is added to your iPhone Home Screen (Safari Share -> Add to Home Screen).");
+      }
     }
   };
+
 
   return (
     <View style={styles.container}>

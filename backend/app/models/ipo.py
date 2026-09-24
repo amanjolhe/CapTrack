@@ -100,3 +100,12 @@ class IPOReminder(SQLModel, table=True):
     event_type: str     # open_date, close_date, allotment
     is_notified: bool = False
     created_at: datetime = Field(default_factory=get_utc_now)
+
+class UserPushSubscription(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    user_id: str = Field(index=True)
+    endpoint: str
+    p256dh: str
+    auth: str
+    created_at: datetime = Field(default_factory=get_utc_now)
+
