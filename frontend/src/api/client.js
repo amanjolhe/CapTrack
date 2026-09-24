@@ -1,7 +1,7 @@
 import axios from 'axios';
 
-// Default backend URL (FastAPI running locally or hosted on Fast Cloud)
-const API_BASE_URL = 'http://127.0.0.1:8000';
+// Live Hosted Backend URL on Render
+const API_BASE_URL = 'https://captrack-backend-qm7q.onrender.com';
 
 const client = axios.create({
   baseURL: API_BASE_URL,
