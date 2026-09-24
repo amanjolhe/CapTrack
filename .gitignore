@@ -1,0 +1,28 @@
+# Node / Expo dependencies
+node_modules/
+.expo/
+frontend/dist/
+frontend/.expo/
+frontend/node_modules/
+
+# Python / Environment
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.venv/
+venv/
+ENV/
+
+# Database & local secrets
+*.db
+backend/captrack.db
+.env
+backend/.env
+
+# OS / IDE
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
