@@ -83,14 +83,27 @@ async def sync_live_ipos_to_db():
                 existing_gmp = session.exec(
                     select(IPOGMPHistory).where(IPOGMPHistory.ipo_id == ipo_id)
                 ).first()
-                if not existing_gmp or est_gain_pct != 0.0:
+                
+                if est_gain_pct != 0.0:
                     gmp_val = round(existing_ipo.issue_price_max * (est_gain_pct / 100.0), 2)
+                    gain_pct = est_gain_pct
+                else:
+                    gmp_info = await gmp_service.fetch_gmp(existing_ipo.name, existing_ipo.issue_price_max)
+                    gmp_val = gmp_info["gmp_amount"]
+                    gain_pct = gmp_info["estimated_gain_percent"]
+
+                if existing_gmp:
+                    existing_gmp.gmp_amount = gmp_val
+                    existing_gmp.est_listing_price = round(existing_ipo.issue_price_max + gmp_val, 2)
+                    existing_gmp.estimated_gain_percent = gain_pct
+                    session.add(existing_gmp)
+                else:
                     gmp_entry = IPOGMPHistory(
                         ipo_id=ipo_id,
                         gmp_amount=gmp_val,
                         est_listing_price=round(existing_ipo.issue_price_max + gmp_val, 2),
-                        estimated_gain_percent=est_gain_pct,
-                        source="groww.in",
+                        estimated_gain_percent=gain_pct,
+                        source="live_gmp_tracker",
                         recorded_at=existing_ipo.open_date
                     )
                     session.add(gmp_entry)
